@@ -1,0 +1,4 @@
+out/
+.theos/
+*.ipa
+.DS_Store

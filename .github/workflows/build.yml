@@ -1,0 +1,57 @@
+name: 编译 PhoneGo iOS IPA（巨魔）
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: 拉取源码
+        uses: actions/checkout@v4
+
+      - name: 安装 ldid
+        run: brew install ldid
+
+      - name: 选择 Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: 编译 + 签名 + 打包
+        run: bash build.sh
+
+      - name: 产物校验
+        run: |
+          set -e
+          python3 - <<'PY'
+          import zipfile, struct, os, glob
+          ipa = sorted(glob.glob('out/PhoneGo_*.ipa'))[-1]
+          z = zipfile.ZipFile(ipa)
+          names = z.namelist()
+          exe = [n for n in names if n.endswith('Payload/PhoneGo.app/PhoneGo')]
+          assert exe, '找不到主可执行文件'
+          data = z.read(exe[0])
+          magic = data[:4]
+          assert magic == b'\xcf\xfa\xed\xfe', f'magic 非 arm64 Mach-O: {magic.hex()}'
+          cputype = struct.unpack('<I', data[4:8])[0]
+          assert cputype == 0x0100000c, f'cputype 非 arm64: {hex(cputype)}'
+          # Info.plist 存在性
+          assert any(n.endswith('Info.plist') for n in names), 'Info.plist 缺失'
+          print('IPA:', ipa, os.path.getsize(ipa), 'bytes')
+          print('主程序 magic=', magic.hex(), 'cputype=', hex(cputype), 'size=', len(data))
+          print('包内文件:', len(names))
+          for n in names[:20]:
+            print('  ', n)
+          banned = [b'CydiaSubstrate', b'MobileSubstrate', b'DynamicLibraries', b'libsubstrate']
+          for kw in banned:
+            assert kw not in data, f'残留禁用关键词 {kw}'
+          print('禁用关键词扫描: 通过')
+          PY
+
+      - name: 上传 IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhoneGo-ipa
+          path: out/*.ipa
+          if-no-files-found: error
