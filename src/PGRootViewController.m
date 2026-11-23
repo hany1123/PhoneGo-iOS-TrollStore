@@ -23,24 +23,12 @@
     [super viewDidLoad];
     self.view.backgroundColor = [UIColor systemGroupedBackgroundColor];
     self.title = @"PhoneGo";
-    [PGAgent shared].delegate = self;
+    // 关键：启动阶段绝不触碰任何私有 API（IOHIDEvent/dlsym/CGDisplay）。
+    // 这些底层 C 调用崩溃是 SIGSEGV/SIGABRT 信号级，@try/@catch 抓不住。
+    // 触摸/截屏模块推迟到用户点「开始任务」时才初始化，保证 App 一定能打开。
     [self buildUI];
-    // 私有 API 诊断延迟到界面显示后，且异常保护——避免 dlopen/IOHID 初始化失败导致启动闪退
-    [self log:@"PhoneGo 已启动，正在检测权限…"];
-    [self performSelector:@selector(probeCapabilitiesSafe) withObject:nil afterDelay:0.3];
-}
-
-- (void)probeCapabilitiesSafe {
-    @try {
-        [self log:[NSString stringWithFormat:@"触摸: %@", [PGTouch shared].diagnosticInfo]];
-    } @catch (NSException *e) {
-        [self log:[NSString stringWithFormat:@"触摸检测异常: %@", e.reason]];
-    }
-    @try {
-        [self log:[NSString stringWithFormat:@"截屏: %@", [PGScreen shared].diagnosticInfo]];
-    } @catch (NSException *e) {
-        [self log:[NSString stringWithFormat:@"截屏检测异常: %@", e.reason]];
-    }
+    [self log:@"PhoneGo 已启动。请配置模型后点「开始任务」。"];
+    [self log:@"提示：iOS16+ 需在设置里开启开发者模式并重启，否则会闪退。"];
 }
 
 - (void)buildUI {

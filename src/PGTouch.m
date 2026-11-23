@@ -90,7 +90,10 @@ typedef void (*PGBKSDigitizerInfoFn)(PGHIDEventRef, uint32_t, uint8_t, uint8_t, 
 - (void)resolveSymbols {
     void *io = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_LAZY);
     void *bks = dlopen("/System/Library/PrivateFrameworks/BackBoardServices.framework/BackBoardServices", RTLD_LAZY);
-    dlopen("/System/Library/PrivateFrameworks/SpringBoard.framework/SpringBoard", RTLD_LAZY);
+    // 【致命坑】绝不 dlopen SpringBoard.framework！
+    // 真机崩溃日志证明：dlopen 会执行 +[SpringBoardUI load]，在普通 App 进程里
+    // 抛异常 → objc_exception_throw → SIGABRT，且发生在 dyld load_images 阶段，
+    // @try/@catch 无法拦截。contextId 改用调用时动态获取，不主动加载该 framework。
 
     _createDigitizer = (PGCreateDigitizerFn)dlsym(RTLD_DEFAULT, "IOHIDEventCreateDigitizerEvent");
     _createFinger    = (PGCreateFingerFn)dlsym(RTLD_DEFAULT, "IOHIDEventCreateDigitizerFingerEvent");
