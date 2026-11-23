@@ -127,10 +127,9 @@
     NSString *userText = [NSString stringWithFormat:@"User task: %@\nCurrent step: %ld\nRecent actions:\n%@",
         task, (long)step, history.count ? [history componentsJoinedByString:@"\n"] : @"(none)"];
 
-    NSString *b64 = [png base64EncodedStringWithOptions:NSDataBase64Encoding64LineLengthLineBreaks];
-    NSString *dataURL = [NSString stringWithFormat:@"data:image/jpeg;base64,%@", b64];
-    // 注意：png 数据用 image/jpeg mime 也可被多数端点接受；这里按实际 png 标注更安全：
-    dataURL = [NSString stringWithFormat:@"data:image/png;base64,%@", b64];
+    // options=0 表示无换行；NSDataBase64Encoding64LineLengthLineBreaks 在新 SDK 已移除
+    NSString *b64 = [png base64EncodedStringWithOptions:0];
+    NSString *dataURL = [NSString stringWithFormat:@"data:image/png;base64,%@", b64];
 
     NSArray *messages = @[
         @{@"role": @"system", @"content": sys},

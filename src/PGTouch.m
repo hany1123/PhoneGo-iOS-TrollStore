@@ -7,6 +7,7 @@
 #import "PGTouch.h"
 #import "PGCommon.h"
 #import <dlfcn.h>
+#import <mach/mach_time.h>
 
 #pragma mark - 私有函数指针类型（IOHIDEvent ABI）
 
@@ -50,7 +51,7 @@ typedef void (*PGBKSDigitizerInfoFn)(PGHIDEventRef, uint32_t, uint8_t, uint8_t, 
 #pragma mark - SpringBoard / 前台 contextId 私有声明
 
 @interface SBApplication : NSObject
-- (id)_contextId;
+- (uint32_t)_contextId;
 @end
 @interface UIApplication (PGPrivate)
 - (NSInteger)_frontmostAppOrientation;
@@ -137,8 +138,16 @@ typedef void (*PGBKSDigitizerInfoFn)(PGHIDEventRef, uint32_t, uint8_t, uint8_t, 
         }
     }
     if (app && [app respondsToSelector:@selector(_contextId)]) {
-        uint32_t ctx = (uint32_t)[app performSelector:@selector(_contextId)];
-        if (ctx) _targetContext = ctx;
+        // 用 NSInvocation 明确取无符号整型返回值，避免 performSelector(id) 的指针截断警告
+        NSMethodSignature *sig = [app methodSignatureForSelector:@selector(_contextId)];
+        if (sig) {
+            NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+            [inv setSelector:@selector(_contextId)];
+            [inv invokeWithTarget:app];
+            uint32_t ctx = 0;
+            [inv getReturnValue:&ctx];
+            if (ctx) _targetContext = ctx;
+        }
     }
     (void)SBA;
 }

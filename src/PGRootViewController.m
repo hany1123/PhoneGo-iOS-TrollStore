@@ -3,6 +3,7 @@
 //  两个 Tab：控制台（任务+日志）、设置（模型端点）。
 //
 #import "PGRootViewController.h"
+#import <objc/runtime.h>
 #import "PGCommon.h"
 #import "PGConfig.h"
 #import "PGAgent.h"

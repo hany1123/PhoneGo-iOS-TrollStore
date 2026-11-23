@@ -27,6 +27,9 @@ xcrun --sdk iphoneos clang \
   -Wno-undeclared-selector \
   -Wno-objc-method-access \
   -Wno-unused-variable \
+  -Wno-pointer-to-int-cast \
+  -Wno-int-to-pointer-cast \
+  -Wno-objc-method-access \
   -framework UIKit -framework Foundation -framework CoreGraphics -framework QuartzCore \
   -Wl,-undefined,dynamic_lookup \
   $SRCS \

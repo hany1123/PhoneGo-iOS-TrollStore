@@ -1,19 +1,26 @@
 //
 //  PGScreen.m
-//  巨魔无沙盒下截取全屏：优先用 backboardd 的 IOSurface，降级到 UIGraphics 截自身窗口。
-//  关键：普通沙盒 App 只能截自己；no-sandbox + 私有 API 才能读到整个 display。
+//  巨魔无沙盒下截取全屏。iOS SDK 不公开 CGDisplayCreateImage，全部用 dlsym 动态解析。
+//  路径优先级：
+//   1) CoreGraphics CGDisplayCreateImage —— 无沙盒 + platform-application 下可读主 display
+//   2) UIGraphics 抓自身所有 window（自身窗口，跨 App 需路径 1）
 //
 #import "PGScreen.h"
 #import "PGCommon.h"
 #import <dlfcn.h>
 #import <CoreGraphics/CoreGraphics.h>
 
-typedef CGImageRef (*PGCaptureScreenFn)(uint32_t display, CGImageRef *out, ...);
+// iOS 上 CGDirectDisplayID = uint32_t；符号用 dlsym 取，避免 implicit declaration
+typedef uint32_t PGDisplayID;
+typedef CGImageRef (*PGCaptureScreenFn)(PGDisplayID display);
+typedef PGDisplayID (*PGMainDisplayFn)(void);
 
 @implementation PGScreen {
     BOOL _probed;
     NSString *_info;
-    void *_bsLib;
+    void *_cgLib;
+    PGCaptureScreenFn _captureScreen;
+    PGMainDisplayFn _mainDisplay;
 }
 
 + (instancetype)shared {
@@ -28,35 +35,33 @@ typedef CGImageRef (*PGCaptureScreenFn)(uint32_t display, CGImageRef *out, ...);
 }
 
 - (void)probe {
-    _bsLib = dlopen("/System/Library/PrivateFrameworks/BackBoardServices.framework/BackBoardServices", RTLD_LAZY);
-    dlopen("/System/Library/PrivateFrameworks/ScreenCaptureKit.framework/ScreenCaptureKit", RTLD_LAZY);
-    dlopen("/System/Library/Frameworks/UIKit.framework/UIKit", RTLD_LAZY);
+    _cgLib = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_LAZY);
+    void *bks = dlopen("/System/Library/PrivateFrameworks/BackBoardServices.framework/BackBoardServices", RTLD_LAZY);
+    _mainDisplay = (PGMainDisplayFn)dlsym(RTLD_DEFAULT, "CGMainDisplayID");
+    _captureScreen = (PGCaptureScreenFn)dlsym(RTLD_DEFAULT, "CGDisplayCreateImage");
+    if (!_captureScreen && _cgLib) _captureScreen = (PGCaptureScreenFn)dlsym(_cgLib, "CGDisplayCreateImage");
     _probed = YES;
-    _info = [NSString stringWithFormat:@"sandbox=%@ backboard=%@ screenScale=%.2f",
-        [self isSandboxed] ? @"YES" : @"NO", _bsLib ? @"OK" : @"--", [UIScreen mainScreen].scale];
+    _info = [NSString stringWithFormat:@"CG截图=%@ 主屏=%@ backboard=%@ scale=%.2f",
+        _captureScreen ? @"OK" : @"--", _mainDisplay ? @"OK" : @"--",
+        bks ? @"OK" : @"--", [UIScreen mainScreen].scale];
     PGLog("%@", _info);
-}
-
-- (BOOL)isSandboxed {
-    // 通过 sandbox_init 是否可用来粗判；no-sandbox 下 getenv 容器路径仍存在但沙盒profile不生效。
-    const char *p = getenv("HOME");
-    BOOL sandboxContainer = (p && strstr(p, "Containers/Data/Application") != NULL);
-    // platform-application + no-sandbox 时该 HOME 仍可能是容器，故仅作信息展示，不作为能力判据。
-    return sandboxContainer;
 }
 
 - (NSData *)capturePNG:(CGSize *)outPointSize {
     UIImage *img = nil;
 
-    // 路径 1：CGDisplayCreateImage —— 无沙盒 + platform-application 下可读主 display
-    CGDirectDisplayID display = CGMainDisplayID();
-    CGImageRef cg = CGDisplayCreateImage(display);
-    if (cg) {
-        img = [UIImage imageWithCGImage:cg scale:1.0 orientation:UIImageOrientationUp];
-        CGImageRelease(cg);
+    // 路径 1：CGDisplayCreateImage（dlsym）—— 无沙盒下读整个 display
+    if (_captureScreen) {
+        PGDisplayID display = _mainDisplay ? _mainDisplay() : 0;
+        CGImageRef cg = _captureScreen(display);
+        if (cg) {
+            img = [UIImage imageWithCGImage:cg scale:1.0 orientation:UIImageOrientationUp];
+            CGImageRelease(cg);
+            PGLog("路径1 CGDisplayCreateImage 成功");
+        }
     }
 
-    // 路径 2：UIGraphics 抓当前 keyWindow 的所有 window（自身窗口；跨App需路径1）
+    // 路径 2：UIGraphics 抓自身所有 window（自身窗口；跨 App 需路径 1）
     if (!img) {
         CGRect bounds = [UIScreen mainScreen].bounds;
         UIGraphicsBeginImageContextWithOptions(bounds.size, NO, 0);
@@ -66,6 +71,7 @@ typedef CGImageRef (*PGCaptureScreenFn)(uint32_t display, CGImageRef *out, ...);
         }
         img = UIGraphicsGetImageFromCurrentImageContext();
         UIGraphicsEndImageContext();
+        if (img) PGLog("路径2 UIGraphics 成功（仅自身窗口）");
     }
 
     if (!img) {
