@@ -25,8 +25,22 @@
     self.title = @"PhoneGo";
     [PGAgent shared].delegate = self;
     [self buildUI];
-    [self log:[NSString stringWithFormat:@"%@", [PGTouch shared].diagnosticInfo]];
-    [self log:[NSString stringWithFormat:@"%@", [PGScreen shared].diagnosticInfo]];
+    // 私有 API 诊断延迟到界面显示后，且异常保护——避免 dlopen/IOHID 初始化失败导致启动闪退
+    [self log:@"PhoneGo 已启动，正在检测权限…"];
+    [self performSelector:@selector(probeCapabilitiesSafe) withObject:nil afterDelay:0.3];
+}
+
+- (void)probeCapabilitiesSafe {
+    @try {
+        [self log:[NSString stringWithFormat:@"触摸: %@", [PGTouch shared].diagnosticInfo]];
+    } @catch (NSException *e) {
+        [self log:[NSString stringWithFormat:@"触摸检测异常: %@", e.reason]];
+    }
+    @try {
+        [self log:[NSString stringWithFormat:@"截屏: %@", [PGScreen shared].diagnosticInfo]];
+    } @catch (NSException *e) {
+        [self log:[NSString stringWithFormat:@"截屏检测异常: %@", e.reason]];
+    }
 }
 
 - (void)buildUI {

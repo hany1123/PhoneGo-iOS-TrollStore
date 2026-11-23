@@ -39,8 +39,13 @@ echo "=== 编译产物 ==="
 file "$APP/PhoneGo"
 ls -lh "$APP/PhoneGo"
 
-echo "=== 写入 Info.plist ==="
+echo "=== 写入 Info.plist + 图标资源 ==="
 cp src/Info.plist "$APP/Info.plist"
+if [ -d Resources ]; then
+  cp -R Resources/*.png "$APP/" 2>/dev/null || true
+  echo "--- 图标资源 ---"
+  ls -1 "$APP"/*.png 2>/dev/null || echo "警告: 无图标"
+fi
 
 echo "=== ldid 伪签（带 entitlements） ==="
 ldid -Sentitlements/PhoneGo.entitlements "$APP/PhoneGo"

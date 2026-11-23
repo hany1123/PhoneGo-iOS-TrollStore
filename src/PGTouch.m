@@ -107,7 +107,14 @@ typedef void (*PGBKSDigitizerInfoFn)(PGHIDEventRef, uint32_t, uint8_t, uint8_t, 
 
     _resolved = (_createDigitizer && _createFinger && _append &&
                  _setFloat && _setInt && _clientCreate && _dispatch);
-    if (_resolved) _client = _clientCreate(kCFAllocatorDefault);
+    if (_resolved) {
+        @try {
+            _client = _clientCreate(kCFAllocatorDefault);
+        } @catch (NSException *e) {
+            PGLog("IOHID client 创建异常: %@", e.reason);
+            _client = NULL;
+        }
+    }
     PGLog("%@", [self diagnosticInfo]);
 }
 
