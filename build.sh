@@ -47,13 +47,12 @@ ldid -Sentitlements/PhoneGo.entitlements "$APP/PhoneGo"
 echo "--- 签名后的 entitlements ---"
 ldid -e "$APP/PhoneGo" | head -40
 
-echo "=== 打包 IPA ==="
+echo "=== 打包 IPA（标准结构：zip 根必须有 Payload/ 目录） ==="
+rm -rf Payload
 mkdir -p Payload
-rm -rf Payload/PhoneGo.app
 cp -R "$APP" Payload/
-cd Payload
-zip -qry "$OUT/PhoneGo.ipa" PhoneGo.app
-cd ..
+# 从项目根目录打包，保留 Payload/ 前缀（TrollStore 必需）
+zip -qry "$OUT/PhoneGo.ipa" Payload
 V=$(date +%Y%m%d)
 cp "$OUT/PhoneGo.ipa" "$OUT/PhoneGo_${V}.ipa"
 ls -lh "$OUT"/*.ipa

@@ -29,8 +29,9 @@ jobs:
           ipa = sorted(glob.glob('out/PhoneGo_*.ipa'))[-1]
           z = zipfile.ZipFile(ipa)
           names = z.namelist()
+          assert any(n.startswith('Payload/') for n in names), 'IPA 缺少 Payload/ 前缀（TrollStore 会拒绝）'
           exe = [n for n in names if n.endswith('Payload/PhoneGo.app/PhoneGo')]
-          assert exe, '找不到主可执行文件'
+          assert exe, f'找不到主可执行文件; 包内前几项: {names[:6]}'
           data = z.read(exe[0])
           magic = data[:4]
           assert magic == b'\xcf\xfa\xed\xfe', f'magic 非 arm64 Mach-O: {magic.hex()}'
